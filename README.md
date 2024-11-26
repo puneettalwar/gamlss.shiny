@@ -1,6 +1,6 @@
 # gamlss.shiny
 
-The current version of GAMLSS toolbox can be used to
+The current version of GAMLSS shiny toolbox can be used to
           
           - fit basic GAMLSS models
           - identify fit distribution family for the dependent variables
