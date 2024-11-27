@@ -1,6 +1,6 @@
 # gamlss.shiny
 
-*** Warning! This Shiny App has not been enough validated ! There is no warranty for the app! ***
+*** Warning! This Shiny App has not been validated enough! There is no warranty for the app! ***
 
 https://puneet-talwar.shinyapps.io/GAMLSSToolbox/
 
