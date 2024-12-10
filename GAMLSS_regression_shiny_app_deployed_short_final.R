@@ -169,7 +169,7 @@ server <- function(input, output, session) {
     })
     
     output$familyInput <- renderUI({
-      selectInput("family", "Family of Distribution", choices = c("NO","GA","GG","BE","BB","BNB","BEOI",	"BEZI",	"BEINF","BI","BCCG","BCPE","BCPEo","BCT","DEL","DBURR12","DPO","DBI","EXP","exGAUS",	
+      selectInput("family", "Family of Distribution", choices = c("NO","GA","GG","BE","BB","BNB","BEOI","BEZI","BEINF","BI","BCCG","BCCGo","BCPE","BCPEo","BCT","DEL","DBURR12","DPO","DBI","EXP","exGAUS",	
                                                                   "EGB2",	"GA","GB1","GB2","GG","GIG","GT","GEOM","GEOMo","GU","IGAMMA","IG","JSU","LG","LO","LOGITNO",	
                                                                   "LOGNO","LNO","NBI","NBII","NBF","NET","NOF","LQNO","PARETO2","PARETO2o","PE","PE2","PO","PIG","RGE","RG",	
                                                                   "SEP1","SEP2","SEP3","SEP4","SHASH","SHASHo","SHASH","SI","SICHEL","SIMPLEX","ST1","ST2","ST3","ST4","ST5",	
@@ -235,6 +235,8 @@ server <- function(input, output, session) {
       results <- list()
       
       #Fitdist output
+      
+      print("Fit distribution for the Dependent Variable. Check recommended family below")
       
       for (i in seq_along(y)) {
         fit <- tryCatch({
