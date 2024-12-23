@@ -7,11 +7,12 @@ library(DT)
 
 # Define UI
 ui <- fluidPage(
+  # (theme = shinytheme("cerulean"),
   titlePanel("GAMLSS Regression Toolbox"),
   
   sidebarLayout(
     sidebarPanel(
-      fileInput("data_file", "Upload Data Frame", accept = c(".csv", ".xlsx")),
+      fileInput("data_file","Upload Data Frame (Excel or csv files)", accept = c(".csv", ".xlsx")),
       actionButton("view_data", "View Data"),
       radioButtons("missing_value", "Missing Value Treatment", choices = c("Missing (Blank)", "-999"), selected = "NA"),
       actionButton("remove_missing", "Remove Missing Values"),
@@ -23,9 +24,12 @@ ui <- fluidPage(
       verbatimTextOutput("dimAfterOutlierRemoval"),
       p("Multiple y and x inputs are allowed"),
       uiOutput("yInput"),
+      actionButton("fit_distribution", "Fit Distribution"),
+      verbatimTextOutput("fitStatus"),
       uiOutput("xInput"),
       uiOutput("interactInput"),
       uiOutput("familyInput"),
+      p("Select atleast one covariate"),
       uiOutput("additionalVarsInput"),
       p("Distributional parameter formulas (optional):"),
       uiOutput("sigmaFormulaInput"),
@@ -33,45 +37,60 @@ ui <- fluidPage(
       uiOutput("tauFormulaInput"),
       uiOutput("customFamilyInput"),
       uiOutput("customEquationInput"),
-      actionButton("run", "Run Models"),
-      
-      div(style="text-align:left", "INSTRUCTIONS",br(),
-          
-          "The current version of GAMLSS toolbox can be used to",br(),
-          
-          "- fit basic GAMLSS models",br(),
-          "- identify fit distribution family for the dependent variables" ,br(),
-          "- run analysis for a multiple dependent and independent variables simultaneously",br(),
-          
-          "Usage:",br(), 
-          "- Data input format: xlsx or csv file with header row containing variable names.",br(),
-          "By default first sheet will be used as the input. Ex. mtcars, sleepstudy (lme4)",br(),
-          "- Missing values are either empty cells or coded -999 in the data",br(),
-          
-          "- For outlier removal specify the standard deviation value (ex. 3)",br(),
-          
-          "- Multiple covariates can be selected from the input data (age sex bmi)",br(), 
-          
-          "- Run the first model with Normal (NO) distribution and check the fit distribution family recommendation output by gamlss. multiple fit families can be selected for good-of-fit comparison.",br(),
-          
-          "- For family of distributions Refer- https://www.gamlss.com/wp-content/uploads/2023/06/gamlssreferencecard.pdf",br(),
-          
-          "- Custom equation format : y ~ x1 + x2",br(),
-          
-          "Note:",br(),
-          
-          "-The summary output uses qr method for stability and consistency.",br(),
-          
-          "For using splines in a GAMLSS model, custom equation option should be used.",br(),
-          
-          "Currently, it does not support Random effects.",br(),
-          
-          "For advanced R script with options to download results (tables and plots), please send an email to ptalwar@uliege.be; talwar.puneet@gmail.com."
-      )
+      actionButton("run", "Run Models")
     ),
     
     mainPanel(
       tabsetPanel(
+        tabPanel("Instructions", 
+                 
+                 div(style="text-align:left; font-size: 16px",br(),
+                     br(),
+                     tags$b("The current version of GAMLSS toolbox can be used to"),br(),
+                     br(),
+                     "- fit basic GAMLSS models",br(),
+                     "- identify fit distribution family for the dependent variables" ,br(),
+                     "- run analysis for a multiple dependent and independent variables simultaneously",br(),
+                     br(),
+                     tags$b("Usage:"),br(),
+                     br(),
+                     "- Data input format: xlsx or csv file with header row containing variable names.",br(),
+                     "- By default first sheet will be used as the input. Ex. mtcars, sleepstudy (lme4)",br(),
+                     "- Missing values are either empty cells or coded -999 in the data",br(),
+                     
+                     "- For outlier removal specify the standard deviation value (ex. 3)",br(),
+                     
+                     "- Multiple covariates can be selected from the input data (age sex bmi)",br(), 
+                     
+                     "- Multiple fit families can be selected for good-of-fit comparison.",br(),
+                     
+                     "- For family of distributions Refer- https://www.gamlss.com/wp-content/uploads/2023/06/gamlssreferencecard.pdf",br(),
+                     
+                     "- Custom equation format : y ~ x1 + x2",br(),
+                     br(),
+                     
+                     tags$b("Note:"),br(),
+                     br(),
+                     "- The summary output uses qr method for stability and consistency.",br(),
+                     
+                     "- For using splines in a GAMLSS model, custom equation option should be used.",br(),
+                     
+                     "- Currently, it does not support Random effects.",br(),
+                     
+                     " - For advanced R script with options to download results (tables and plots), please send an email to
+                         ptalwar@uliege.be; talwar.puneet@gmail.com."
+                     
+                 )
+        ),
+        
+        tabPanel("Outlier Logs",
+                 verbatimTextOutput("verboseLogs") # Logs displayed here
+        ),
+        
+        tabPanel("FitDist Output",
+                 verbatimTextOutput("fitDistLogs") # Logs displayed here
+        ),
+        
         tabPanel("Model Summary", 
                  verbatimTextOutput("modelOutput"),
                  tableOutput("summaryTable"),
@@ -84,6 +103,8 @@ ui <- fluidPage(
     )
   )
 )
+
+
 
 server <- function(input, output, session) {
   
@@ -124,16 +145,32 @@ server <- function(input, output, session) {
     })
   })
   
-  # Remove outliers based on standard deviation
+  
   observeEvent(input$remove_outliers, {
+    # Get the current dataset (cleaned or original)
     df <- isolate(if (is.null(rv$cleaned_data)) rv$data else rv$cleaned_data)
-    df_no_outliers <- dataPreparation::remove_sd_outlier(df, n_sigmas = input$n_sigmas, verbose = TRUE)
-    rv$data_no_outliers <- df_no_outliers
     
-    output$dimAfterOutlierRemoval <- renderText({
-      paste("Dimensions after removing outliers: ", paste(dim(df_no_outliers), collapse = " x "))
+    # Create a connection to capture verbose output
+    verbose_logs <- capture.output({
+      df_no_outliers <- dataPreparation::remove_sd_outlier(df,cols = "auto",n_sigmas = input$n_sigmas,verbose = TRUE)
+      # Save the cleaned data
+      rv$data_no_outliers <- df_no_outliers
+    }, type = "output")
+    
+    # Concatenate verbose logs into a single string for display
+    verbose_logs <- paste(verbose_logs, collapse = "\n")
+    
+    # Render verbose logs in the app
+    output$verboseLogs <- renderText({
+      verbose_logs
     })
+    
+    # Display dimensions after removing outliers
+    output$dimAfterOutlierRemoval <- renderText({
+      paste("Dimensions after removing outliers: ", paste(dim(rv$data_no_outliers), collapse = " x "))
+    })  
   })
+  
   
   # Data Preview Table
   observeEvent(input$view_data, {
@@ -169,7 +206,7 @@ server <- function(input, output, session) {
     })
     
     output$familyInput <- renderUI({
-      selectInput("family", "Family of Distribution", choices = c("NO","GA","GG","BE","BB","BNB","BEOI","BEZI","BEINF","BI","BCCG","BCCGo","BCPE","BCPEo","BCT","DEL","DBURR12","DPO","DBI","EXP","exGAUS",	
+      selectInput("family", "Family of Distribution", choices = c("NO","GA","GG","BE","BB","BNB","BEOI","BEZI",	"BEINF","BI","BCCG","BCCGo","BCPE","BCPEo","BCT","DEL","DBURR12","DPO","DBI","EXP","exGAUS",	
                                                                   "EGB2",	"GA","GB1","GB2","GG","GIG","GT","GEOM","GEOMo","GU","IGAMMA","IG","JSU","LG","LO","LOGITNO",	
                                                                   "LOGNO","LNO","NBI","NBII","NBF","NET","NOF","LQNO","PARETO2","PARETO2o","PE","PE2","PO","PIG","RGE","RG",	
                                                                   "SEP1","SEP2","SEP3","SEP4","SHASH","SHASHo","SHASH","SI","SICHEL","SIMPLEX","ST1","ST2","ST3","ST4","ST5",	
@@ -233,24 +270,6 @@ server <- function(input, output, session) {
       nu_vars <- input$nu_vars
       tau_vars <- input$tau_vars
       results <- list()
-      
-      #Fitdist output
-      
-      print("Fit distribution for the Dependent Variable. Check recommended family below")
-      
-      for (i in seq_along(y)) {
-        fit <- tryCatch({
-          fitDist(df[[y[i]]], k = 2, type = "realplus", trace = FALSE, try.gamlss = TRUE)
-        }, error = function(e) {
-          cat("Error in fitting distribution: ", e$message, "\n")
-          NULL
-        })
-        
-        if (!is.null(fit)) {
-          print(paste("Dependent Variable =",y[i]))
-          summary(fit)
-        }
-      }
       
       for (dv in y) {
         for (iv in x) {
@@ -319,6 +338,47 @@ server <- function(input, output, session) {
     results
   })
   
+  observeEvent(input$fit_distribution, {
+    
+    df <- isolate(if (is.null(rv$data_no_outliers)) if (is.null(rv$cleaned_data)) rv$data else rv$cleaned_data else rv$data_no_outliers)
+    y <- input$y
+    
+    fit_logs <- vector("list", length(y)) # Store logs for each variable
+    
+    for (i in seq_along(y)) {
+      fit_logs[[i]] <- tryCatch({
+        fit <- fitDist(df[[y[i]]], k = 2, type = "realplus", trace = FALSE, try.gamlss = TRUE)
+        summary(fit)
+        
+        if (!is.null(fit)) {
+          log <-paste(capture.output(summary(fit)),collapse = "\n")
+          log
+        } else {
+          paste("Dependent Variable =", y[i], ": Fit failed or returned NULL.")
+        }
+      }, error = function(e) {
+        paste("Error in fitting distribution for", y[i], ":", e$message)
+      })
+    }
+    
+    all_logs <- paste(
+      paste("Dependent Variable:", y, collapse = "\n"),
+      "\n\n",
+      paste(fit_logs, collapse = "\n\n"),
+      collapse = "\n\n"
+    )
+    
+    # Render logs in the FitDist Output tab
+    output$fitDistLogs <- renderText({
+      all_logs
+    })
+    
+    # Update status in the main panel
+    output$fitStatus <- renderText({
+      "Fit distribution process completed. Check the 'FitDist Output' tab for details."
+    })
+  }) 
+  
   # Dynamically generate tabs for plots
   output$plotTabs <- renderUI({
     req(rv$models)
@@ -353,6 +413,8 @@ server <- function(input, output, session) {
     results <- runModels()
     if (is.list(results)) {
       lapply(results, function(res) if (inherits(res, "gamlss")) summary(res,type = "qr") else res) # uses "qr" by default
+      print("R squared for models")
+      lapply(results, function(res) if (inherits(res, "gamlss")) Rsq(res) else res)
     } else {
       results
     }
