@@ -4,6 +4,7 @@ library(gamlss)
 library(readr)
 library(readxl)
 library(DT)
+library(modelsummary)
 
 # Define UI
 ui <- fluidPage(
@@ -297,39 +298,45 @@ server <- function(input, output, session) {
             
             print(paste("Dependent Variable =",dv))
             
-            # Model without interaction
-            tryCatch({
-              model_no_interact <- gamlss(
-                formula = formula_no_interact, 
-                sigma.formula = sigma_formula,
-                nu.formula = nu_formula,
-                tau.formula = tau_formula,
-                family = fam,
-                data = df,
-                control = gamlss.control(n.cyc = 2000, trace = TRUE)
-              )
-              results[[paste(dv, iv, fam, "No Interaction")]] <- model_no_interact
-            }, error = function(e) {
-              results[[paste(dv, iv, fam, "No Interaction")]] <- paste("Error:", e$message)
-            })
-            
-            # Model with interaction (only if formula_with_interact is non-NULL)
-            if (!is.null(formula_with_interact)) {
-              tryCatch({
-                model_with_interact <- gamlss(
-                  formula = formula_with_interact, 
-                  sigma.formula = sigma_formula,
-                  nu.formula = nu_formula,
-                  tau.formula = tau_formula,
-                  family = fam,
-                  data = df,
-                  control = gamlss.control(n.cyc = 2000, trace = TRUE)
-                )
-                results[[paste(dv, iv, fam, "With Interaction")]] <- model_with_interact
-              }, error = function(e) {
-                results[[paste(dv, iv, fam, "With Interaction")]] <- paste("Error:", e$message)
-              })
-            }
+# Model without interaction
+tryCatch({
+  model_no_interact <- gamlss(
+    formula = formula_no_interact, 
+    sigma.formula = sigma_formula,
+    nu.formula = nu_formula,
+    tau.formula = tau_formula,
+    family = fam,
+    data = df,
+    control = gamlss.control(n.cyc = 2000, trace = FALSE)
+  )
+  estimates_no_interact <- get_estimates(model_no_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95)
+  summary <- summary(model_no_interact, type="qr")
+  Rsq_no_interact <- Rsq(model_no_interact)
+  results[[paste(dv, iv, fam, "No Interaction")]] <- list(model = model_no_interact, summary = summary, estimates = estimates_no_interact,Rsq = Rsq_no_interact)
+}, error = function(e) {
+  results[[paste(dv, iv, fam, "No Interaction")]] <- paste("Error:", e$message)
+})
+
+# Model with interaction (only if formula_with_interact is non-NULL)
+if (!is.null(formula_with_interact)) {
+  tryCatch({
+    model_with_interact <- gamlss(
+      formula = formula_with_interact, 
+      sigma.formula = sigma_formula,
+      nu.formula = nu_formula,
+      tau.formula = tau_formula,
+      family = fam,
+      data = df,
+      control = gamlss.control(n.cyc = 2000, trace = FALSE)
+    )
+    estimates_with_interact <- get_estimates(model_with_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95)
+    summary <- summary(model_with_interact, type="qr")
+    Rsq_with_interact <- Rsq(model_with_interact)
+    results[[paste(dv, iv, fam, "With Interaction")]] <- list(model = model_with_interact, summary = summary, estimates = estimates_with_interact,Rsq = Rsq_with_interact)
+  }, error = function(e) {
+    results[[paste(dv, iv, fam, "With Interaction")]] <- paste("Error:", e$message)
+  })
+}
           }
         }
       }
@@ -398,7 +405,7 @@ server <- function(input, output, session) {
     models <- rv$models
     for (model_name in names(models)) {
       local({
-        model <- models[[model_name]]
+        model <- models[[model_name]]$model
         model_id <- paste0("plot_", gsub(" ", "_", model_name))
         if (inherits(model, "gamlss")) {
           output[[model_id]] <- renderPlot({
@@ -411,15 +418,9 @@ server <- function(input, output, session) {
   
   output$modelOutput <- renderPrint({
     results <- runModels()
-    if (is.list(results)) {
-      lapply(results, function(res) if (inherits(res, "gamlss")) summary(res,type = "qr") else res) # uses "qr" by default
-      print("R squared for models")
-      lapply(results, function(res) if (inherits(res, "gamlss")) Rsq(res) else res)
-    } else {
-      results
-    }
-  })
-}
-
+    results
+    })
+  }
+  
 # Run the application 
 shinyApp(ui = ui, server = server)
