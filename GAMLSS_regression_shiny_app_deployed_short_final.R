@@ -270,7 +270,7 @@ server <- function(input, output, session) {
       sigma_vars <- input$sigma_vars
       nu_vars <- input$nu_vars
       tau_vars <- input$tau_vars
-      #results <- list()
+      results <- list()
       
       for (dv in y) {
         for (iv in x) {
