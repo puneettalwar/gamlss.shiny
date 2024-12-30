@@ -247,7 +247,7 @@ server <- function(input, output, session) {
     df <- isolate(if (is.null(rv$data_no_outliers)) if (is.null(rv$cleaned_data)) rv$data else rv$cleaned_data else rv$data_no_outliers)
     custom_equation <- input$custom_equation
     custom_family <- input$custom_family
-    #results <- list()
+    results <- list()
     
     if (custom_equation != "") {
       if (custom_family == "") {
@@ -257,7 +257,7 @@ server <- function(input, output, session) {
       tryCatch({
         model <- gamlss(as.formula(custom_equation), family = custom_family, data = df)
         results[[custom_equation]] <- model
-        #summary(model,type="qr")
+        summary(model,type="qr")
       }, error = function(e) {
         results[[custom_equation]] <- as.character(e)
       })
@@ -270,7 +270,7 @@ server <- function(input, output, session) {
       sigma_vars <- input$sigma_vars
       nu_vars <- input$nu_vars
       tau_vars <- input$tau_vars
-      results <- list()
+      #results <- list()
       
       for (dv in y) {
         for (iv in x) {
