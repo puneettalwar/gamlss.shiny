@@ -27,7 +27,7 @@ ui <- fluidPage(
       #   uiOutput("select_columns_ui"),
       #   actionButton("apply_column_selection", "Apply Column Selection")
       # ),
-      radioButtons("missing_value", "Missing Value Treatment (Empty or dots)", choices = c("Empty/Blank cells", "."), selected = "NA"),
+      radioButtons("missing_value", "Missing Value Treatment (Empty/Blank cells)", choices = c("Empty/Blank cells"), selected = "NA"),
       actionButton("remove_missing", "Remove Missing Values"),
       verbatimTextOutput("dimBefore"),
       verbatimTextOutput("dimAfter"),
@@ -69,7 +69,7 @@ ui <- fluidPage(
                      br(),
                      "- Data input format: xlsx or csv file with header row containing variable names.",br(),
                      "- By default first sheet will be used as the input. Ex. mtcars, sleepstudy (lme4)",br(),
-                     "- Missing values are either empty cells or dot (.) in the data",br(),
+                     "- Missing values are blank/empty cells in the data",br(),
                      
                      "- For outlier removal specify the standard deviation value (ex. 3)",br(),
                      
@@ -189,9 +189,9 @@ server <- function(input, output, session) {
       paste("Missing data check: ", paste(names(df), sapply(df, function(x) sum(is.na(x))), sep = ": ", collapse = ", "))
     })
     
-    if (input$missing_value == ".") {
-      df[df == "."] <- NA
-    }
+    # if (input$missing_value == ".") {
+    #   df[df == "."] <- NA
+    # }
     df_cleaned <- na.omit(df)
     rv$cleaned_data <- df_cleaned
     
