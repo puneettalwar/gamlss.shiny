@@ -14,7 +14,7 @@ The current version of GAMLSS shiny toolbox can be used to
           
           - Data input format: xlsx or csv file with header row containing variable names.
           - By default first sheet will be used as the input. Ex. mtcars, sleepstudy (lme4)"
-          - Missing values are either empty cells or dot (.) in the data
+          - Missing values are either blank/empty cells in the data
           
           - For outlier removal specify the standard deviation value (ex. 3)
           
