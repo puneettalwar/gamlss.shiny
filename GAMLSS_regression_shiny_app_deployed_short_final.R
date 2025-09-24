@@ -162,6 +162,41 @@ server <- function(input, output, session) {
   #   # Hide or collapse the column selection tab
   #   hide("column_selection_div")  # This uses shinyjs to hide the div
   # })
+
+    # after selecting columns, present variable-type selectors
+  output$factor_vars_ui <- renderUI({
+    req(rv$selected_data)
+    selectInput('factor_vars', 'Variables to treat as Categorical / Factor', choices = names(rv$selected_data), multiple = TRUE)
+  })
+  output$numeric_vars_ui <- renderUI({
+    req(rv$selected_data)
+    selectInput('numeric_vars', 'Variables to treat as Numeric', choices = names(rv$selected_data), multiple = TRUE)
+  })
+
+# Apply variable types
+observeEvent(input$apply_var_types, {
+  req(rv$selected_data)
+  df <- rv$selected_data
+  
+  # Coerce factors
+  if (!is.null(input$factor_vars) && length(input$factor_vars) > 0) {
+    for (v in input$factor_vars) {
+      if (v %in% names(df)) {
+        df[[v]] <- as.factor(df[[v]])
+      }
+    }
+  }
+  # Coerce numeric (numeric choice takes precedence if variable chosen in both)
+  if (!is.null(input$numeric_vars) && length(input$numeric_vars) > 0) {
+    for (v in input$numeric_vars) {
+      if (v %in% names(df)) {
+        df[[v]] <- suppressWarnings(as.numeric(df[[v]]))
+      }
+    }
+  }
+  rv$selected_data <- df
+  showNotification('Variable types applied', type = 'message')
+})
   
   observeEvent(input$view_data, {
     showModal(modalDialog(
@@ -389,10 +424,12 @@ server <- function(input, output, session) {
                 data = df,
                 control = gamlss.control(n.cyc = 2000, trace = FALSE)
               )
-              estimates_no_interact <- get_estimates(model_no_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95)
+              #estimates_no_interact <- get_estimates(model_no_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95)
               summary <- summary(model_no_interact, type="qr")
               Rsq_no_interact <- Rsq(model_no_interact)
-              results[[paste(dv, iv, fam, "No Interaction")]] <- list(model = model_no_interact, summary = summary, estimates = estimates_no_interact,Rsq = Rsq_no_interact)
+              est <- get_estimates(model_no_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95,what="mu",exponentiate=TRUE)
+              results[[paste(dv, iv, fam, "No Interaction")]] <- list(model = model_no_interact, summary = summary, est_exponentiated = est, Rsq = Rsq_no_interact)              
+              #results[[paste(dv, iv, fam, "No Interaction")]] <- list(model = model_no_interact, summary = summary, estimates = estimates_no_interact,Rsq = Rsq_no_interact)
             }, error = function(e) {
               results[[paste(dv, iv, fam, "No Interaction")]] <- paste("Error:", e$message)
             })
@@ -409,10 +446,12 @@ server <- function(input, output, session) {
                   data = df,
                   control = gamlss.control(n.cyc = 2000, trace = FALSE)
                 )
-                estimates_with_interact <- get_estimates(model_with_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95)
+                #estimates_with_interact <- get_estimates(model_with_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95)
                 summary <- summary(model_with_interact, type="qr")
                 Rsq_with_interact <- Rsq(model_with_interact)
-                results[[paste(dv, iv, fam, "With Interaction")]] <- list(model = model_with_interact, summary = summary, estimates = estimates_with_interact,Rsq = Rsq_with_interact)
+                est_interact <- get_estimates(model_with_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95,what="mu",exponentiate=TRUE)
+                results[[paste(dv, iv, fam, "With Interaction")]] <- list(model = model_with_interact, summary = summary, est_exponentiated =est_interact, Rsq = Rsq_with_interact)
+                #results[[paste(dv, iv, fam, "With Interaction")]] <- list(model = model_with_interact, summary = summary, estimates = estimates_with_interact,Rsq = Rsq_with_interact)
               }, error = function(e) {
                 results[[paste(dv, iv, fam, "With Interaction")]] <- paste("Error:", e$message)
               })
@@ -538,3 +577,4 @@ server <- function(input, output, session) {
 
 # Run the application 
 shinyApp(ui = ui, server = server)
+
