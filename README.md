@@ -28,7 +28,7 @@ The current version of GAMLSS shiny toolbox can be used to
           
           Note:
           
-          -The summary output uses "qr" method for stability and consistency.
+          - The summary output can use either 'vcov' or 'qr' for summary type; 'vcov' is the default.
           
           For using splines in a GAMLSS model, custom equation option should be used.
           
