@@ -1,9 +1,12 @@
-# Full patched Shiny app with:
-# - summary type option (vcov or qr) with "vcov" as default
-# - optional second interaction variable
-# - safer plotting to reduce "outside the scale range" issues (try + fallback plots)
-#
-# Minimal changes made to your original app to preserve behavior.
+#**************************************************************
+# by Puneet Talwar
+# Dec 2025
+
+# R 4.1.3
+#**************************************************************
+
+options(width = 200)
+options(shiny.maxRequestSize=30*1024^2) # Maximum upload file size 30 MB
 
 # Load necessary libraries
 library(shiny)
@@ -18,10 +21,18 @@ library(mctest)
 library(gamlss.add)    # if used elsewhere
 library(dataPreparation) # for remove_sd_outlier (used in your original)
 
-# Define UI
+#Define UI
 ui <- fluidPage(
   useShinyjs(),  # Include shinyjs
   titlePanel("GAMLSS Regression Toolbox"),
+  
+#   tags$head(
+#     tags$style(HTML("
+#       pre { 
+#         overflow: auto; 
+#         word-wrap: normal; 
+#       }"))
+#   ),
   
   sidebarLayout(
     sidebarPanel(
@@ -441,13 +452,14 @@ server <- function(input, output, session) {
               summary_out <- tryCatch(summary(model_no_interact, type = summary_type), error = function(e) summary(model_no_interact, type = "vcov"))
               Rsq_no_interact <- Rsq(model_no_interact)
               est_tbl <- get_estimates(model_no_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95,what="mu",exponentiate=TRUE)
+              est_tbl2 <- get_estimates(model_no_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95)
               gof_list <- list(
                 AIC = tryCatch(AIC(model_no_interact), error = function(e) NA),
                 BIC = tryCatch(BIC(model_no_interact), error = function(e) NA),
                 GOF = tryCatch(gamlss::gof(model_no_interact), error = function(e) NA)
               )
               results[[paste(dv, iv, fam, "No Interaction")]] <- list(model = model_no_interact, summary = summary_out, est_exponentiated = est_tbl, Rsq = Rsq_no_interact, gof = gof_list)
-              model_tables[[paste(dv, iv, fam, "No Interaction")]] <- list(table = est_tbl, dv = dv, gof = gof_list)
+              model_tables[[paste(dv, iv, fam, "No Interaction")]] <- list(table = est_tbl2, dv = dv, gof = gof_list)
             }, error = function(e) {
               results[[paste(dv, iv, fam, "No Interaction")]] <- paste("Error:", e$message)
             })
@@ -467,9 +479,10 @@ server <- function(input, output, session) {
                 summary_out <- tryCatch(summary(model_with_interact, type = summary_type), error = function(e) summary(model_with_interact, type = "vcov"))
                 Rsq_with_interact <- Rsq(model_with_interact)
                 est_interact <- get_estimates(model_with_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95,what="mu",exponentiate=TRUE)
+                est_interact2 <- get_estimates(model_with_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95)
                 gof_list2 <- list(AIC = tryCatch(AIC(model_with_interact), error = function(e) NA), BIC = tryCatch(BIC(model_with_interact), error = function(e) NA), GOF = tryCatch(gamlss::gof(model_with_interact), error = function(e) NA))
                 results[[paste(dv, iv, fam, "With Interaction")]] <- list(model = model_with_interact, summary = summary_out, est_exponentiated =est_interact, Rsq = Rsq_with_interact, gof = gof_list2)
-                model_tables[[paste(dv, iv, fam, "With Interaction")]] <- list(table = est_interact, dv = dv, gof = gof_list2)
+                model_tables[[paste(dv, iv, fam, "With Interaction")]] <- list(table = est_interact2, dv = dv, gof = gof_list2)
               }, error = function(e) {
                 results[[paste(dv, iv, fam, "With Interaction")]] <- paste("Error:", e$message)
               })
