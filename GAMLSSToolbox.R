@@ -37,7 +37,7 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       fileInput("data_file","Upload Data Frame (Excel or csv files)", accept = c(".csv", ".xlsx")),
-      actionButton("view_data", "View Data"),
+      #actionButton("view_data", "View Data"),
       p("Select columns to include or exclude from analysis:"),
       uiOutput("select_columns_ui"),
       actionButton("apply_column_selection", "Apply Column Selection"),
@@ -54,6 +54,7 @@ ui <- fluidPage(
       numericInput("n_sigmas", "Standard deviation for Outlier Removal", value = NULL, min = 1),
       actionButton("remove_outliers", "Remove Outliers"),
       verbatimTextOutput("dimAfterOutlierRemoval"),
+      downloadButton("download_no_outliers", "Download Cleaned CSV"),
       p("Multiple y and x inputs are allowed"),
       uiOutput("yInput"),
       actionButton("fit_distribution", "Fit Distribution"),
@@ -117,6 +118,9 @@ ui <- fluidPage(
                          ptalwar@uliege.be; talwar.puneet@gmail.com."
                      
                  )
+        ),
+        
+        tabPanel("Data", DTOutput("dataPreviewTable")
         ),
         
         tabPanel("Outlier Logs",
@@ -228,11 +232,11 @@ server <- function(input, output, session) {
     ))
   })
   
-  output$dataPreviewTable <- renderDT({
-    req(rv$data)
-    df <- isolate(if (is.null(rv$data_no_outliers)) if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data else rv$data_no_outliers)
-    datatable(df, options = list(scrollX = TRUE, pageLength = 20))
-  })
+  # output$dataPreviewTable <- renderDT({
+  #   req(rv$data)
+  #   df <- isolate(if (is.null(rv$data_no_outliers)) if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data else rv$data_no_outliers)
+  #   datatable(df, options = list(scrollX = TRUE, pageLength = 20))
+  # })
   
   
   # Remove missing values
@@ -278,6 +282,23 @@ server <- function(input, output, session) {
       paste("Dimensions after removing outliers: ", paste(dim(rv$data_no_outliers), collapse = " x "))
     })  
   })
+  
+  
+  # Outputs
+  output$dataPreviewTable <- renderDT({
+    req(rv$data)
+    datatable(rv$data, options = list(scrollX = TRUE, pageLength = 25))
+  })
+  
+  output$download_no_outliers <- downloadHandler(
+    filename = function() {
+      paste0("cleaned_no_outliers_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      req(rv$data_no_outliers)   # ensure data exists
+      write.csv(rv$data_no_outliers, file, row.names = FALSE)
+    }
+  )
   
   # Dynamically generate inputs for y, x, family, and additional variables based on the uploaded dataset
   observe({
@@ -458,7 +479,7 @@ server <- function(input, output, session) {
                 BIC = tryCatch(BIC(model_no_interact), error = function(e) NA),
                 GOF = tryCatch(gamlss::gof(model_no_interact), error = function(e) NA)
               )
-              results[[paste(dv, iv, fam, "No Interaction")]] <- list(model = model_no_interact, summary = summary_out, est_exponentiated = est_tbl, Rsq = Rsq_no_interact, gof = gof_list)
+              results[[paste(dv, iv, fam, "No Interaction")]] <- list(model = model_no_interact, summary = summary_out, est_exponentiated = est_tbl, Rsq = Rsq_no_interact)#, gof = gof_list)
               model_tables[[paste(dv, iv, fam, "No Interaction")]] <- list(table = est_tbl2, dv = dv, gof = gof_list)
             }, error = function(e) {
               results[[paste(dv, iv, fam, "No Interaction")]] <- paste("Error:", e$message)
@@ -481,7 +502,7 @@ server <- function(input, output, session) {
                 est_interact <- get_estimates(model_with_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95,what="mu",exponentiate=TRUE)
                 est_interact2 <- get_estimates(model_with_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95)
                 gof_list2 <- list(AIC = tryCatch(AIC(model_with_interact), error = function(e) NA), BIC = tryCatch(BIC(model_with_interact), error = function(e) NA), GOF = tryCatch(gamlss::gof(model_with_interact), error = function(e) NA))
-                results[[paste(dv, iv, fam, "With Interaction")]] <- list(model = model_with_interact, summary = summary_out, est_exponentiated =est_interact, Rsq = Rsq_with_interact, gof = gof_list2)
+                results[[paste(dv, iv, fam, "With Interaction")]] <- list(model = model_with_interact, summary = summary_out, est_exponentiated =est_interact, Rsq = Rsq_with_interact)#, gof = gof_list2)
                 model_tables[[paste(dv, iv, fam, "With Interaction")]] <- list(table = est_interact2, dv = dv, gof = gof_list2)
               }, error = function(e) {
                 results[[paste(dv, iv, fam, "With Interaction")]] <- paste("Error:", e$message)
