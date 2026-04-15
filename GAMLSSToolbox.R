@@ -57,6 +57,18 @@ ui <- fluidPage(
       downloadButton("download_no_outliers", "Download Cleaned CSV"),
       p("Multiple y and x inputs are allowed"),
       uiOutput("yInput"),
+      selectInput(
+        inputId = "dist_type",
+        label = "Select Distribution Type",
+        choices = c(
+          "realline" = "realline",
+          "realplus" = "realplus",
+          "real0to1" = "real0to1",
+          "counts"   = "counts",
+          "binom"    = "binom"
+        ),
+        selected = "realplus"
+      ),
       actionButton("fit_distribution", "Fit Distribution"),
       verbatimTextOutput("fitStatus"),
       uiOutput("xInput"),
@@ -519,42 +531,62 @@ server <- function(input, output, session) {
   
   observeEvent(input$fit_distribution, {
     
-    df <- isolate(if (is.null(rv$data_no_outliers)) if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data else rv$data_no_outliers)
-    y <- input$y
+    df <- isolate(
+      if (is.null(rv$data_no_outliers)) {
+        if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data
+      } else {
+        rv$data_no_outliers
+      }
+    )
     
-    fit_logs <- vector("list", length(y)) # Store logs for each variable
+    y <- input$y
+    selected_type <- input$dist_type   # <-- user-selected type
+    
+    fit_logs <- vector("list", length(y))
     
     for (i in seq_along(y)) {
+      
       fit_logs[[i]] <- tryCatch({
-        fit <- fitDist(df[[y[i]]], k = 2, type = "realplus", trace = FALSE, try.gamlss = TRUE)
-        summary(fit)
+        
+        fit <- fitDist(
+          df[[y[i]]],
+          k = 2,
+          type = selected_type,   # <-- dynamic type
+          trace = FALSE,
+          try.gamlss = TRUE
+        )
         
         if (!is.null(fit)) {
-          log <-paste(capture.output(summary(fit)),collapse = "\n")
-          log
+          paste(
+            "Dependent Variable =", y[i], "\n",
+            "Type =", selected_type, "\n",
+            paste(capture.output(summary(fit)), collapse = "\n")
+          )
         } else {
           paste("Dependent Variable =", y[i], ": Fit failed or returned NULL.")
         }
+        
       }, error = function(e) {
         paste("Error in fitting distribution for", y[i], ":", e$message)
       })
     }
     
     all_logs <- paste(
-      paste("Dependent Variable:", y, collapse = "\n"),
+      paste("Selected Type:", selected_type),
       "\n\n",
       paste(fit_logs, collapse = "\n\n"),
-      collapse = "\n\n"
+      collapse = "\n"
     )
     
-    # Render logs in the FitDist Output tab
+    # Render logs
     output$fitDistLogs <- renderText({
       all_logs
     })
     
-    # Update status in the main panel
+    # Status message
     output$fitStatus <- renderText({
-      "Fit distribution process completed. Check the 'FitDist Output' tab for details."
+      paste("Fit distribution completed using type:", selected_type,
+            ". Check the 'FitDist Output' tab for details.")
     })
   }) 
   
@@ -651,7 +683,7 @@ server <- function(input, output, session) {
           req(model_entry)
           if (inherits(model, "gamlss")) {
             tryCatch({
-              mc.plot(model)
+              mc.plot(model) #mctest::mc.plot
               
             }, error = function(e) {
               try(safe_resid_fallback(model), silent = TRUE)
