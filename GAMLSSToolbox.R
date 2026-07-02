@@ -26,13 +26,13 @@ ui <- fluidPage(
   useShinyjs(),  # Include shinyjs
   titlePanel("GAMLSS Regression Toolbox"),
   
-#   tags$head(
-#     tags$style(HTML("
-#       pre { 
-#         overflow: auto; 
-#         word-wrap: normal; 
-#       }"))
-#   ),
+  #   tags$head(
+  #     tags$style(HTML("
+  #       pre { 
+  #         overflow: auto; 
+  #         word-wrap: normal; 
+  #       }"))
+  #   ),
   
   sidebarLayout(
     sidebarPanel(
@@ -412,7 +412,8 @@ server <- function(input, output, session) {
       }
       
       tryCatch({
-        model <- gamlss(as.formula(custom_equation), family = custom_family, data = df)
+        model <- gamlss(as.formula(custom_equation), family = custom_family, data = df,
+                        control = gamlss.control(n.cyc = 2000, trace = FALSE))
         results[[custom_equation]] <- model
         # use selected summary type
         summary(model, type = summary_type)
@@ -491,7 +492,18 @@ server <- function(input, output, session) {
                 BIC = tryCatch(BIC(model_no_interact), error = function(e) NA),
                 GOF = tryCatch(gamlss::gof(model_no_interact), error = function(e) NA)
               )
-              results[[paste(dv, iv, fam, "No Interaction")]] <- list(model = model_no_interact, summary = summary_out, est_exponentiated = est_tbl, Rsq = Rsq_no_interact)#, gof = gof_list)
+              #results[[paste(dv, iv, fam, "No Interaction")]] <- list(model = model_no_interact, summary = summary_out, est_exponentiated = est_tbl, Rsq = Rsq_no_interact)#, gof = gof_list)
+              results[[paste(dv, iv, fam, "No Interaction")]] <- list(
+                model = model_no_interact,
+                summary = summary_out,
+                est_exponentiated = est_tbl,
+                Rsq = Rsq_no_interact,
+                convergence = list(
+                  converged = tryCatch(model_no_interact$converged, error = function(e) NA),
+                  iterations = tryCatch(model_no_interact$iter, error = function(e) NA),
+                  cycles = tryCatch(model_no_interact$no.cyc, error = function(e) NA)
+                )
+              )
               model_tables[[paste(dv, iv, fam, "No Interaction")]] <- list(table = est_tbl2, dv = dv, gof = gof_list)
             }, error = function(e) {
               results[[paste(dv, iv, fam, "No Interaction")]] <- paste("Error:", e$message)
@@ -514,7 +526,18 @@ server <- function(input, output, session) {
                 est_interact <- get_estimates(model_with_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95,what="mu",exponentiate=TRUE)
                 est_interact2 <- get_estimates(model_with_interact,digits=4,quick = FALSE, conf.int = TRUE, conf.level = 0.95)
                 gof_list2 <- list(AIC = tryCatch(AIC(model_with_interact), error = function(e) NA), BIC = tryCatch(BIC(model_with_interact), error = function(e) NA), GOF = tryCatch(gamlss::gof(model_with_interact), error = function(e) NA))
-                results[[paste(dv, iv, fam, "With Interaction")]] <- list(model = model_with_interact, summary = summary_out, est_exponentiated =est_interact, Rsq = Rsq_with_interact)#, gof = gof_list2)
+                #results[[paste(dv, iv, fam, "With Interaction")]] <- list(model = model_with_interact, summary = summary_out, est_exponentiated =est_interact, Rsq = Rsq_with_interact)#, gof = gof_list2)
+                results[[paste(dv, iv, fam, "With Interaction")]] <- list(
+                  model = model_with_interact,
+                  summary = summary_out,
+                  est_exponentiated = est_interact,
+                  Rsq = Rsq_with_interact,
+                  convergence = list(
+                    converged = tryCatch(model_with_interact$converged, error = function(e) NA),
+                    iterations = tryCatch(model_with_interact$iter, error = function(e) NA),
+                    cycles = tryCatch(model_with_interact$no.cyc, error = function(e) NA)
+                  )
+                )
                 model_tables[[paste(dv, iv, fam, "With Interaction")]] <- list(table = est_interact2, dv = dv, gof = gof_list2)
               }, error = function(e) {
                 results[[paste(dv, iv, fam, "With Interaction")]] <- paste("Error:", e$message)
@@ -712,10 +735,37 @@ server <- function(input, output, session) {
   })
   
   
+  # output$modelOutput <- renderPrint({
+  #   results <- runModels()
+  #   # print summary for each (or the object list) - keep original behavior
+  #   results
+  # })
+  
   output$modelOutput <- renderPrint({
     results <- runModels()
-    # print summary for each (or the object list) - keep original behavior
-    results
+    
+    for (nm in names(results)) {
+      cat("\n============================\n")
+      cat("Model:", nm, "\n")
+      cat("============================\n")
+      
+      res <- results[[nm]]
+      
+      if (is.list(res) && !is.null(res$model)) {
+        
+        conv <- res$convergence
+        
+        cat("Converged:", conv$converged, "\n")
+        cat("Iterations:", conv$iterations, "\n")
+        cat("Cycles:", conv$cycles, "\n\n")
+        
+        #print(res$summary)
+        results
+        
+      } else {
+        print(res)
+      }
+    }
   })
   
   # Render model tables UI (one DT and download button per model table)
