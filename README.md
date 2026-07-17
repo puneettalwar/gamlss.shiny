@@ -1,4 +1,4 @@
-# gamlss.shiny
+# Shiny GAMLSSToolbox
 
 *** Warning! This Shiny App has not been validated enough! There is no warranty for the app! ***
 
