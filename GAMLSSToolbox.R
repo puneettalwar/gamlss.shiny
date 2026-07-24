@@ -8,7 +8,10 @@
 options(width = 200)
 options(shiny.maxRequestSize=30*1024^2) # Maximum upload file size 30 MB
 
-# Load necessary libraries
+#*****************************
+# Load libraries
+#*****************************
+ 
 library(shiny)
 library(gamlss)
 library(readr)
@@ -19,20 +22,69 @@ library(shinyjs)
 library(gamlss.ggplots)
 library(mctest)
 library(gamlss.add)    # if used elsewhere
-library(dataPreparation) # for remove_sd_outlier (used in your original)
 
-#Define UI
+#*****************************
+# UI 
+#*****************************
+
 ui <- fluidPage(
   useShinyjs(),  # Include shinyjs
-  titlePanel("GAMLSS Regression Toolbox"),
   
-  #   tags$head(
-  #     tags$style(HTML("
-  #       pre { 
-  #         overflow: auto; 
-  #         word-wrap: normal; 
-  #       }"))
-  #   ),
+  # ---- Custom color theme ----
+  
+  tags$head(
+    tags$style(HTML("
+        body {
+          background-color: #f4f7fb;
+        }
+        .title-panel-custom {
+          background: linear-gradient(90deg, #2c3e6b 0%, #3f6fb5 100%);
+          color: #ffffff;
+          padding: 18px 24px;
+          border-radius: 8px;
+          margin-bottom: 18px;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
+        .well {
+          background-color: #eaf1fb;
+          border: 1px solid #c7d9f0;
+        }
+        .nav-tabs > li > a {
+          color: #2c3e6b;
+          font-weight: 600;
+        }
+        .nav-tabs > li.active > a,
+        .nav-tabs > li.active > a:focus,
+        .nav-tabs > li.active > a:hover {
+          background-color: #3f6fb5 !important;
+          color: #ffffff !important;
+          border-color: #3f6fb5;
+        }
+        hr {
+          border-top: 1px solid #b7c9e2;
+        }
+        .btn, .btn-default {
+          background-color: #3f6fb5;
+          color: #ffffff;
+          border: none;
+        }
+        .btn:hover, .btn-default:hover {
+          background-color: #2c3e6b;
+          color: #ffffff;
+        }
+        h4 {
+          color: #2c3e6b;
+        }
+      "))
+  ),
+  
+  div(class = "title-panel-custom",
+      titlePanel("GAMLSSToolbox")
+      # tags$img(src = "FlexibleGLMM_logo.png", 
+      #          height = "80px",
+      #          #width = "50%",
+      #          style="position:fixed;right:30px;top:10px;")
+  ),
   
   sidebarLayout(
     sidebarPanel(
@@ -51,10 +103,31 @@ ui <- fluidPage(
       verbatimTextOutput("dimBefore"),
       verbatimTextOutput("dimAfter"),
       verbatimTextOutput("missingDataCheck"),
-      numericInput("n_sigmas", "Standard deviation for Outlier Removal", value = NULL, min = 1),
+      hr(),
+      selectInput("outlier_method", "Outlier Detection Method",
+                  choices = c("None",
+                              "Z-score (SD cutoff)",
+                              "Mahalanobis Distance"
+                              )
+      ),
+      numericInput("n_sigmas", "SD cutoff (Z-score)", value = NA, min = 1),
+      numericInput("mahal_cutoff", "Mahalanobis cutoff (Chi-square quantile, e.g. 0.99)", value = 0.99, min = 0.5, max = 0.999),
       actionButton("remove_outliers", "Remove Outliers"),
       verbatimTextOutput("dimAfterOutlierRemoval"),
+      hr(),
       downloadButton("download_no_outliers", "Download Cleaned CSV"),
+      hr(),
+      uiOutput("standardize_vars_ui"),
+      uiOutput("standardize_vars"),
+      radioButtons("center_scale_mode", "Numeric preprocessing",
+                   choices = c("Center and scale" = "center_scale",
+                               "Center only" = "center_only",
+                               "Scale only" = "scale_only",
+                               "None" = "none"),
+                   selected = "center_scale"),
+      actionButton("apply_standardization", "Apply data standardization"),
+      actionButton("open_data_view", "View Processed Data"),
+      hr(),
       p("Multiple y and x inputs are allowed"),
       uiOutput("yInput"),
       selectInput(
@@ -134,11 +207,7 @@ ui <- fluidPage(
         
         tabPanel("Data", DTOutput("dataPreviewTable")
         ),
-        
-        tabPanel("Outlier Logs",
-                 verbatimTextOutput("verboseLogs") # Logs displayed here
-        ),
-        
+
         tabPanel("FitDist Output",
                  verbatimTextOutput("fitDistLogs") # Logs displayed here
         ),
@@ -149,23 +218,35 @@ ui <- fluidPage(
                  DTOutput("dataTable")
         ),
         
-        
         tabPanel("Model Tables",
                  uiOutput("modelTablesUI")
+        ),
+    
+        tabPanel("Diagnostics",
+                uiOutput("diagnostics_ui")
         ),
         
         tabPanel("Plots", 
                  uiOutput("plotTabs")  # Dynamically generated tabs for plots
-        )
+        ),
       )
     )
   )
 )
 
+#*****************************
+# SERVER 
+#*****************************
+
 server <- function(input, output, session) {
   
   # Reactive values to store data
   rv <- reactiveValues(data = NULL, cleaned_data = NULL, selected_data = NULL, data_no_outliers = NULL, models = NULL, model_tables = NULL)
+  
+
+  #----------------------
+  # Data Upload
+  #----------------------  
   
   # Reactive expression to read the uploaded data
   observe({
@@ -179,6 +260,10 @@ server <- function(input, output, session) {
       stop("Invalid file type. Please upload a .csv or .xlsx file.")
     }
   })
+  
+  #----------------------
+  # Column selector
+  #----------------------
   
   output$select_columns_ui <- renderUI({
     req(rv$data)
@@ -196,7 +281,9 @@ server <- function(input, output, session) {
     showNotification("Column selection applied", type = "message")
   })
   
-  ##########################################################################  
+  #----------------------
+  # Variable types
+  #----------------------
   
   # after selecting columns, present variable-type selectors
   output$factor_vars_ui <- renderUI({
@@ -233,23 +320,9 @@ server <- function(input, output, session) {
     showNotification('Variable types applied', type = 'message')
   })
   
-  #########################################################################
-  
-  observeEvent(input$view_data, {
-    showModal(modalDialog(
-      title = "Data Frame",
-      DTOutput("dataPreviewTable"),
-      size = "l",
-      easyClose = TRUE
-    ))
-  })
-  
-  # output$dataPreviewTable <- renderDT({
-  #   req(rv$data)
-  #   df <- isolate(if (is.null(rv$data_no_outliers)) if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data else rv$data_no_outliers)
-  #   datatable(df, options = list(scrollX = TRUE, pageLength = 20))
-  # })
-  
+  #----------------------
+  # Remove missing values
+  #----------------------
   
   # Remove missing values
   observeEvent(input$remove_missing, {
@@ -269,38 +342,50 @@ server <- function(input, output, session) {
     })
   })
   
+  #----------------------
+  # Outlier removal
+  #----------------------
   
   observeEvent(input$remove_outliers, {
-    # Get the current dataset (cleaned or original)
-    df <- isolate(if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data)
     
-    # Create a connection to capture verbose output
-    verbose_logs <- capture.output({
-      df_no_outliers <- dataPreparation::remove_sd_outlier(df,cols = "auto",n_sigmas = input$n_sigmas,verbose = TRUE)
-      # Save the cleaned data
-      rv$data_no_outliers <- df_no_outliers
-    }, type = "output")
+    df <- if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data
+    req(df)
     
-    # Concatenate verbose logs into a single string for display
-    verbose_logs <- paste(verbose_logs, collapse = "\n")
+    method <- input$outlier_method
+    df_num <- df[sapply(df, is.numeric)]
     
-    # Render verbose logs in the app
-    output$verboseLogs <- renderText({
-      verbose_logs
-    })
+    keep <- rep(TRUE, nrow(df))  # default: keep all
     
-    # Display dimensions after removing outliers
+    # --- 1. Z-score method ---
+    if (method == "Z-score (SD cutoff)" && !is.na(input$n_sigmas)) {
+      z <- scale(df_num)
+      keep <- apply(abs(z) < input$n_sigmas, 1, all)
+    }
+    
+
+    # --- 2. Mahalanobis Distance ---
+    if (method == "Mahalanobis Distance") {
+      try({
+        center <- colMeans(df_num, na.rm = TRUE)
+        cov_mat <- cov(df_num, use = "complete.obs")
+        
+        md <- mahalanobis(df_num, center, cov_mat)
+        
+        cutoff <- qchisq(input$mahal_cutoff, df = ncol(df_num))
+        keep <- md < cutoff
+      }, silent = TRUE)
+    }
+    
+    # Apply filtering
+    rv$data_no_outliers <- df[keep, , drop = FALSE]
+    
     output$dimAfterOutlierRemoval <- renderText({
-      paste("Dimensions after removing outliers: ", paste(dim(rv$data_no_outliers), collapse = " x "))
-    })  
+      paste("After outlier removal:",
+            paste(dim(rv$data_no_outliers), collapse = " x "),
+            "| Removed:", sum(!keep))
+    })
   })
   
-  
-  # Outputs
-  output$dataPreviewTable <- renderDT({
-    req(rv$data)
-    datatable(rv$data, options = list(scrollX = TRUE, pageLength = 25))
-  })
   
   output$download_no_outliers <- downloadHandler(
     filename = function() {
@@ -312,12 +397,81 @@ server <- function(input, output, session) {
     }
   )
   
+  
+  #----------------------
+  # Data standardization
+  #----------------------
+  
+  output$standardize_vars_ui <- renderUI({
+    req(rv$selected_data)
+    
+    numeric_cols <- names(rv$selected_data)[
+      sapply(rv$selected_data, is.numeric)
+    ]
+    
+    selectInput(
+      "standardize_vars",
+      "Select Variables to Standardize",
+      choices = numeric_cols,
+      multiple = TRUE
+    )
+  })
+  
+  # Apply preprocessing
+  observeEvent(input$apply_standardization, {
+    req(rv$selected_data)
+    
+    #df <- rv$selected_data
+    df <- if (!is.null(rv$data_no_outliers)) rv$data_no_outliers else 
+      if (!is.null(rv$cleaned_data)) rv$cleaned_data else rv$selected_data
+    req(df)
+    
+    
+    if (!is.null(input$standardize_vars)) {
+      
+      for (v in input$standardize_vars) {
+        
+        if (input$center_scale_mode == "center_scale") {
+          
+          df[[paste0(v, "_cs")]] <-
+            as.numeric(scale(df[[v]],
+                             center = TRUE,
+                             scale = TRUE))
+          
+        } else if (input$center_scale_mode == "center_only") {
+          
+          df[[paste0(v, "_c")]] <-
+            df[[v]] - mean(df[[v]], na.rm = TRUE)
+          
+        } else if (input$center_scale_mode == "scale_only") {
+          
+          df[[paste0(v, "_s")]] <-
+            df[[v]] / sd(df[[v]], na.rm = TRUE)
+        }
+      }
+    }
+    
+    rv$selected_data <- df
+    rv$processed_data <- df
+    
+    showNotification(
+      "Data standardization applied successfully",
+      type = "message"
+    )
+  })
+  
+  #----------------------
+  # Inputs
+  #----------------------
+  
   # Dynamically generate inputs for y, x, family, and additional variables based on the uploaded dataset
   observe({
     req(rv$data)  # Ensure data is available
     
     # Determine the latest version of the data to use for variable selection
-    df <- if (!is.null(rv$data_no_outliers)) {
+    df <- if (!is.null(rv$processed_data)) {
+      rv$processed_data
+    } else if (!is.null(rv$data_no_outliers)) {
       rv$data_no_outliers
     } else if (!is.null(rv$cleaned_data)) {
       rv$cleaned_data
@@ -394,10 +548,36 @@ server <- function(input, output, session) {
     })
   })
   
+  #----------------------
+  # Run models
+  #----------------------
+  
   # Run models based on user input
   runModels <- eventReactive(input$run, {
     req(rv$data)
-    df <- isolate(if (is.null(rv$data_no_outliers)) if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data else rv$data_no_outliers)
+    #df <- isolate(if (is.null(rv$data_no_outliers)) if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data else rv$data_no_outliers)
+    df <- isolate({
+      
+      if (!is.null(rv$processed_data)) {
+        
+        rv$processed_data
+        
+      } else if (!is.null(rv$data_no_outliers)) {
+        
+        rv$data_no_outliers
+        
+      } else if (!is.null(rv$cleaned_data)) {
+        
+        rv$cleaned_data
+        
+      } else {
+        
+        rv$selected_data
+        
+      }
+      
+    })
+    
     custom_equation <- input$custom_equation
     custom_family <- input$custom_family
     model_tables <- list()
@@ -552,15 +732,64 @@ server <- function(input, output, session) {
     results
   })
   
+  #----------------------
+  # Outputs
+  #----------------------
+  
+  # Outputs
+  output$dataPreviewTable <- renderDT({
+    req(rv$data)
+    datatable(rv$data, options = list(scrollX = TRUE, pageLength = 25))
+  })
+  
+  
+  observeEvent(input$open_data_view, {
+    req(rv$selected_data)
+    rv$processed_data    
+    
+    showModal(modalDialog(
+      title = "Processed Data",
+      size = "l",
+      easyClose = TRUE,
+      DT::DTOutput("processed_table"),
+      footer = modalButton("Close")
+    ))
+  })
+  
+  
+  output$processed_table <- DT::renderDT({
+    DT::datatable(
+      rv$processed_data,
+      options = list(
+        pageLength = 25,
+        scrollX = TRUE,
+        scrollY = "500px",
+        lengthMenu = c(10,25,50,100),
+        paging = TRUE
+      ),
+      class = "display nowrap"
+    )
+  })
+  
+  
   observeEvent(input$fit_distribution, {
     
-    df <- isolate(
-      if (is.null(rv$data_no_outliers)) {
-        if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data
-      } else {
-        rv$data_no_outliers
-      }
-    )
+    # df <- isolate(
+    #   if (is.null(rv$data_no_outliers)) {
+    #     if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data
+    #   } else {
+    #     rv$data_no_outliers
+    #   }
+    # )
+    
+    df <- if (!is.null(rv$processed_data))
+      rv$processed_data
+    else if (!is.null(rv$data_no_outliers))
+      rv$data_no_outliers
+    else if (!is.null(rv$cleaned_data))
+      rv$cleaned_data
+    else
+      rv$selected_data
     
     y <- input$y
     selected_type <- input$dist_type   # <-- user-selected type
@@ -734,12 +963,9 @@ server <- function(input, output, session) {
     }
   })
   
-  
-  # output$modelOutput <- renderPrint({
-  #   results <- runModels()
-  #   # print summary for each (or the object list) - keep original behavior
-  #   results
-  # })
+  #----------------------
+  # Model summary output
+  #----------------------
   
   output$modelOutput <- renderPrint({
     results <- runModels()
@@ -760,13 +986,19 @@ server <- function(input, output, session) {
         cat("Cycles:", conv$cycles, "\n\n")
         
         #print(res$summary)
-        results
+        #results
+        summary(res$model)
+        
         
       } else {
         print(res)
       }
     }
   })
+  
+  #----------------------
+  # Model Table output
+  #----------------------
   
   # Render model tables UI (one DT and download button per model table)
   output$modelTablesUI <- renderUI({
@@ -833,6 +1065,85 @@ server <- function(input, output, session) {
     do.call(tagList, tabs)
   })
   
+  # ------------------------------------------------------------------
+  # DIAGNOSTICS UI
+  # ------------------------------------------------------------------
+  
+  observe({
+    
+    results <- runModels()
+    req(results)
+    
+    #df <- if (is.null(rv$cleaned_data)) rv$selected_data else rv$cleaned_data
+    
+    df <- if (!is.null(rv$processed_data))
+      rv$processed_data
+    else if (!is.null(rv$data_no_outliers))
+      rv$data_no_outliers
+    else if (!is.null(rv$cleaned_data))
+      rv$cleaned_data
+    else
+      rv$selected_data
+    
+    df_num <- df[sapply(df, is.numeric)]
+    
+    lapply(names(results), function(nm) {
+      
+      safe <- make.names(nm)
+      
+      # ---------------------------
+      # Mahalanobis Plot
+      # ---------------------------
+      output[[paste0("mahal_", safe)]] <- renderPlot({
+        
+        try({
+          
+          req(ncol(df_num) > 1)
+          
+          df_complete <- na.omit(df_num)
+          
+          center <- colMeans(df_complete)
+          cov_mat <- cov(df_complete)
+          
+          md <- mahalanobis(df_complete, center, cov_mat)
+          
+          cutoff <- qchisq(0.99, df = ncol(df_complete))
+          
+          plot(md,
+               main = "Mahalanobis Distance",
+               ylab = "Distance", xlab = "Observation")
+          
+          abline(h = cutoff, lty = 2)
+          
+          # highlight outliers
+          outliers <- which(md > cutoff)
+          points(outliers, md[outliers], pch = 19)
+          
+        }, silent = TRUE)
+        
+      })
+      
+    })
+  })
+  
+  
+  output$diagnostics_ui <- renderUI({
+    
+    results <- runModels()
+    req(results)
+    
+    tabs <- lapply(names(results), function(nm) {
+      
+      safe <- make.names(nm)
+      
+      tabPanel(nm,
+               h4("Mahalanobis Distance [Default cutoff]"),
+               plotOutput(paste0("mahal_", safe), height = "300px")   
+      )
+    })
+    
+    do.call(tabsetPanel, tabs)
+  })
 }
 
 # Run the application 
