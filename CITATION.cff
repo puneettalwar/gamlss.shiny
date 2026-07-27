@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- name: Puneet Talwar
+  orcid: 0000-0001-7631-7926
+  corresponding: yes
+  affiliation: 1
+- name: Gilles Vandewalle
+  orcid: 0000-0003-2483-2752
+  affiliation: 1
+affiliations:
+- name: "GIGA-Institute, CRC-Human Imaging, University of Liège, Liège, Belgium"
+  index: 1
+title: "GAMLSSToolbox: A User-Friendly R Shiny Application for Generalized Additive Models for Location, Scale, and Shape (GAMLSS) Regression Analysis and Visualization"
+version: 2.4.0
+doi: https://doi.org/10.5281/zenodo.21533304
+date-released: 2026-07-24
+url: "https://github.com/puneettalwar/GAMLSSToolbox"
+repo: "https://github.com/puneettalwar/GAMLSSToolbox/"
