@@ -15,5 +15,7 @@ title: "GAMLSSToolbox: A User-Friendly R Shiny Application for Generalized Addit
 version: 2.4.0
 doi: https://doi.org/10.5281/zenodo.21533304
 date-released: 2026-07-24
+license: MIT
+doi: 10.5281/zenodo.21533304
 url: "https://github.com/puneettalwar/GAMLSSToolbox"
-repo: "https://github.com/puneettalwar/GAMLSSToolbox/"
+repository-code: "https://github.com/puneettalwar/GAMLSSToolbox/"
